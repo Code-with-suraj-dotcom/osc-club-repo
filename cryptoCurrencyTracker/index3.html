@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🚀 Crypto Meme Tracker 🤑</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f111a;
+      color: #fff;
+      padding: 20px;
+    }
+    h1, h2 { text-align: center; }
+    h1{ font-size: 50px;}
+    h1{ color: cyan;}
+    p { text-align: center; color: antiquewhite; }
+    .container-fluid { text-align: center; }
+    .delhi:hover { color: #ff4d4d; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background: #1a1b2a;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td { padding: 12px; text-align: center; }
+    th { background: #22233a; }
+    tr:nth-child(even) { background: #171826; }
+    tr:hover { background: #2a2c4a; cursor: pointer; }
+    select, input {
+      margin: 10px;
+      padding: 8px;
+      border-radius: 5px;
+      border: none;
+    }
+    #coinInfo {
+      margin-top: 20px;
+      background: #1a1b2a;
+      padding: 15px;
+      border-radius: 10px;
+    }
+    .green { color: #00ff99; }
+    .red { color: #ff4d4d; }
+    .emoji { font-size: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="container-fluid">
+    <h1>🚀 CRYPTO PRICE TRACKER 🤑</h1>
+    <p>💡 Stay ahead in the crypto game!
+Track live prices, market cap, and 24h changes of the Top cryptocurrencies in real-time. From Bitcoin and Ethereum to trending altcoins, get instant insights to make smarter trading and investment decisions. 📈🔥
+</p>
+    
+  </div>
+
+  <h2>Top Cryptos Are Here 🔥</h2>
+  <div style="text-align:center; margin-bottom:10px;">
+    <input type="text" id="searchInput" placeholder="🔍 Search crypto..." style="width:250px;">
+  </div>
+
+  <table id="cryptoTable">
+    <thead>
+      <tr>
+        <th>Coin</th>
+        <th>Price (USD)</th>
+        <th>24h Change</th>
+        <th>Market Cap</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h2>Coin Details & Chart 📈</h2>
+  <div style="text-align:center;">
+    <select id="coinSelect"></select>
+    <select id="timeSelect">
+      <option value="1">24 Hours ⏱️</option>
+      <option value="7">7 Days 📅</option>
+      <option value="30">30 Days 🗓️</option>
+      <option value="180">6 Months 🗓️</option>
+      <option value="365">1 Year 🗓️</option>
+      <option value="max">Max 🏆</option>
+    </select>
+  </div>
+
+  <canvas id="coinChart" width="400" height="200"></canvas>
+  <div id="coinInfo"></div>
+
+   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+
+  <script>
+    const coinTableBody = document.querySelector("#cryptoTable tbody");
+    const coinSelect = document.getElementById("coinSelect");
+    const timeSelect = document.getElementById("timeSelect");
+    const coinInfoDiv = document.getElementById("coinInfo");
+    const searchInput = document.getElementById("searchInput");
+
+    let coinChart;
+    let allCoins = [];
+
+    // Crosshair vertical line plugin
+const verticalLinePlugin = {
+  id: 'verticalLine',
+  afterDraw: (chart) => {
+    if (chart.tooltip?._active && chart.tooltip._active.length) {
+      const ctx = chart.ctx;
+      const activePoint = chart.tooltip._active[0].element;
+      const x = activePoint.x;
+      const topY = chart.scales.y.top;
+      const bottomY = chart.scales.y.bottom;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x, topY);
+      ctx.lineTo(x, bottomY);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+};
+
+    // Fetch top 100 coins
+    const fetchTopCoins = async () => {
+      try {
+        const res = await fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false");
+        const data = await res.json();
+        allCoins = data;
+
+        // Fill dropdown with all 100
+        coinSelect.innerHTML = "";
+        allCoins.forEach(coin => {
+          coinSelect.innerHTML += `<option value="${coin.id}">${coin.name}</option>`;
+        });
+
+        // Show only top 10 in table
+        renderTop10(allCoins);
+
+        if (allCoins.length > 0) {
+          fetchCoinData(allCoins[0].id, timeSelect.value);
+        }
+      } catch (error) {
+        console.error("Error fetching coins:", error);
+      }
+    };
+
+    // Render only Top 10 cryptos
+    const renderTop10 = (coins) => {
+      coinTableBody.innerHTML = "";
+      const top10 = coins.slice(0, 10);
+      top10.forEach(coin => {
+        const changeClass = coin.price_change_percentage_24h >= 0 ? 'green' : 'red';
+        const changeEmoji = coin.price_change_percentage_24h >= 0 ? '🚀' : '💀';
+
+        coinTableBody.innerHTML += `
+          <tr onclick="coinSelect.value='${coin.id}'; fetchCoinData('${coin.id}', timeSelect.value);">
+            <td>${coin.name} <span class="emoji">${coin.symbol.toUpperCase()}</span></td>
+            <td>$${coin.current_price.toLocaleString()}</td>
+            <td class="${changeClass}">${coin.price_change_percentage_24h.toFixed(2)}% ${changeEmoji}</td>
+            <td>$${coin.market_cap.toLocaleString()}</td>
+          </tr>
+        `;
+      });
+    };
+
+
+    
+
+    // Fetch data for chart + details
+    const fetchCoinData = async (coinId, days) => {
+      try {
+        const resChart = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`);
+        const chartData = await resChart.json();
+        const prices = chartData.prices.map(p => ({ x: new Date(p[0]), y: p[1] }));
+
+        if (coinChart) coinChart.destroy();
+        const ctx = document.getElementById('coinChart').getContext('2d');
+        coinChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            datasets: [{
+              label: `${coinSelect.options[coinSelect.selectedIndex].text} Price 💰`,
+              data: prices,
+              borderColor: 'cyan',
+              fill: false,
+              pointRadius: 0,
+              borderWidth: 2
+            }]
+          },
+          options: {
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              tooltip: {
+                enabled: true,
+                callbacks: {
+                  label: function(context) {
+                    let price = context.parsed.y.toLocaleString();
+                    let time = new Date(context.parsed.x).toLocaleString();
+                    return `💰 $${price}   🕒 ${time}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: { type: 'time', time: { unit: days <= 1 ? 'hour' : 'day' } },
+              y: { title: { display: true, text: 'Price (USD)' } }
+            }
+          },
+          plugins: [verticalLinePlugin] 
+        });
+        
+    // Search among all 100 cryptos
+    searchInput.addEventListener("keyup", () => {
+      const query = searchInput.value.toLowerCase();
+      const results = allCoins.filter(c => c.name.toLowerCase().includes(query) || c.symbol.toLowerCase().includes(query));
+      if (query) {
+        renderTop10(results);
+      } else {
+        renderTop10(allCoins);
+      }
+    });
+        
+
+        // Coin details
+        const resDetails = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}`);
+        const details = await resDetails.json();
+        const desc = details.description.en ? details.description.en.split('. ')[0] : 'No description available.';
+        coinInfoDiv.innerHTML = `
+          <h3>${details.name} ${details.symbol.toUpperCase()} 💎</h3>
+          <p><strong>Current Price:</strong> $${details.market_data.current_price.usd.toLocaleString()} 🤑</p>
+          <p><strong>Market Cap:</strong> $${details.market_data.market_cap.usd.toLocaleString()}</p>
+          <p><strong>Total Supply:</strong> ${details.market_data.total_supply?.toLocaleString() || 'N/A'}</p>
+          <p><strong>Description:</strong> ${desc} 😎</p>
+        `;
+      } catch (error) {
+        console.error("Error fetching coin data:", error);
+      }
+    };
+
+    coinSelect.addEventListener("change", () => { fetchCoinData(coinSelect.value, timeSelect.value); });
+    timeSelect.addEventListener("change", () => { fetchCoinData(coinSelect.value, timeSelect.value); });
+
+    fetchTopCoins();
+    setInterval(fetchTopCoins, 60000);
+
+    
+  </script>
+
+  <p>
+      This site is built by <a href="#">Suraj Lakhyani</a>  
+      contact listed information for further details.
+    </p>
+    <a href="#" class="delhi">lakhyanisuraj@gmail.com</a><br>
+    <a href="#" class="delhi">www.codewithsuraj.com</a>
+</body>
+</html>
